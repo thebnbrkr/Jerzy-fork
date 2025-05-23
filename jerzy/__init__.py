@@ -10,7 +10,7 @@ from .agent import Agent, EnhancedAgent
 __all__ = [
     "Prompt", "ToolCache", "State",
     "Memory", "EnhancedMemory",
-    "Trace", "LLM", "OpenAILLM",
+    "Trace", "AuditTrail", "LLM", "OpenAILLM",
     "Chain", "ConversationChain",
     "Agent", "EnhancedAgent"
 ]
