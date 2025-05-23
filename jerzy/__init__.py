@@ -2,7 +2,7 @@
 
 from .core import Prompt, ToolCache, State, Tool
 from .memory import Memory, EnhancedMemory
-from .trace import Trace, AuditTrail
+from .trace import Trace, AuditTrail, Plan, Planner
 from .llm import LLM, OpenAILLM
 from .chain import Chain, ConversationChain
 from .agent import Agent, EnhancedAgent, ConversationalAgent, MultiAgentSystem, AgentRole, AgentMessage
@@ -16,5 +16,5 @@ __all__ = [
     "Agent", "EnhancedAgent",  "robust_tool", "log_tool_call", 
     "with_fallback", "Tool",
      "ConversationalAgent", "MultiAgentSystem",
-    "AgentRole", "AgentMessage"
+    "AgentRole", "AgentMessage", "Plan", "Planner"
 ]
