@@ -8,7 +8,7 @@ from .core import ToolCache, State, Tool
 from .trace import Trace, AuditTrail, Plan, Planner
 from .memory import Memory, EnhancedMemory
 from .chain import Chain, ConversationChain
-from .llm import LLM, OpenAILLM
+from .llm import LLM, OpenAILLM, CustomOpenAILLM
 
 
 class Agent:
