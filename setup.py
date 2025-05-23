@@ -6,14 +6,8 @@ setup(
     packages=find_packages(),
     install_requires=["openai", "tenacity"],
     author="Anirudh Anil",
-    description="Jerzy: A modular, transparent, and explainable LLM agent framework.",
-    long_description=open("README.md").read() if os.path.exists("README.md") else "",
+    description="Jerzy: A modular, explainable agent framework for LLMs.",
+    long_description="Minimal LLM framework for reasoning, memory, and tools.",
     long_description_content_type="text/markdown",
-    url="https://github.com/thebnbrkr/jerzy",
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
-    python_requires='>=3.8',
+    python_requires=">=3.8",
 )
