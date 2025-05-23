@@ -10,7 +10,10 @@ from .memory import Memory
 from .chain import ConversationChain
 from .llm import LLM
 
+
 class Agent:
+    """Enhanced LLM-powered agent with transparency, reasoning, and caching capabilities."""
+
     def __init__(self, llm: LLM, system_prompt: Optional[str] = None,
                  cache_ttl: Optional[int] = 3600, cache_size: int = 100,
                  enable_auditing: bool = True):
@@ -23,40 +26,652 @@ class Agent:
         self.state = State()
         self.tool_call_history = []
 
+        # Initialize audit trail if enabled
         if enable_auditing:
-            self.audit_trail = None  # You can implement an audit module
+            self.audit_trail = AuditTrail()
+            # If LLM supports audit_trail, connect it
+            if hasattr(self.llm, 'audit_trail'):
+                self.llm.audit_trail = self.audit_trail
         else:
             self.audit_trail = None
 
+
+    def _compare_args(self, args1: dict, args2: dict) -> bool:
+        """Compare two argument dictionaries to detect duplicate tool calls."""
+        try:
+            # Simple comparison - convert to JSON strings and compare
+            import json
+
+            # Sort keys to ensure consistent comparison
+            json1 = json.dumps(args1, sort_keys=True)
+            json2 = json.dumps(args2, sort_keys=True)
+
+            return json1 == json2
+
+        except Exception:
+            # Fallback to basic dict comparison if JSON serialization fails
+            return args1 == args2
+
+    def _extract_info_from_tool_result(self, tool_name: str, tool_args: dict, tool_result: dict) -> None:
+        """Optionally extract structured insights from tool results for future use (e.g., memory, trace)."""
+
+        if not hasattr(self, "memory") or not isinstance(tool_result, dict):
+            return
+
     def add_tools(self, tools: List[Any]) -> None:
+        """Register a list of tools with the agent, avoiding duplicates."""
         for tool in tools:
             if tool.name not in {t.name for t in self.tools}:
                 self.tools.append(tool)
 
-    def remember(self, key: str, value: Any) -> None:
-        if not hasattr(self, 'conversation') or not self.conversation:
-            self.conversation = ConversationChain(self.llm, system_prompt=self.system_prompt)
-        self.conversation.memory.set(key, value)
-        self.conversation.add_message("system", f"Stored information: {key} = {str(value)}", "default")
-
     def chat(self, user_message: str, thread_id: str = "default",
              use_semantic_search: bool = False, context_window: int = 10) -> str:
+        """Have a conversation with the agent, with memory of past interactions."""
+        # Initialize conversation chain if needed
         if not hasattr(self, 'conversation') or not self.conversation:
-            self.conversation = ConversationChain(self.llm, system_prompt=self.system_prompt)
+            self.conversation = ConversationChain(
+                self.llm,
+                EnhancedMemory(),
+                self.system_prompt
+            )
 
+        # Generate response (with or without semantic search)
         if use_semantic_search:
-            return self.conversation.search_and_respond(user_message, thread_id, context_window)
+            return self.conversation.search_and_respond(
+                user_message, thread_id, context_window
+            )
         else:
-            return self.conversation.generate_response(user_message, thread_id, context_window)
+            return self.conversation.generate_response(
+                user_message, thread_id, context_window
+            )
+
+    def remember(self, key: str, value: Any) -> None:
+        """Explicitly store information in memory for later reference."""
+        # Initialize conversation chain if needed
+        if not hasattr(self, 'conversation') or not self.conversation:
+            self.conversation = ConversationChain(
+                self.llm,
+                EnhancedMemory(),
+                self.system_prompt
+            )
+
+        # Store in memory
+        self.conversation.memory.set(key, value)
+
+        # Add a system note about this
+        self.conversation.add_message(
+            "system",
+            f"Stored information: {key} = {str(value)}",
+            "default"
+        )
 
     def save_conversation(self, filepath: str) -> None:
+        """Save the current conversation to a file."""
         if hasattr(self, 'conversation') and self.conversation:
             self.conversation.save_conversation(filepath)
+        else:
+            print("No conversation to save.")
 
     def load_conversation(self, filepath: str) -> None:
+        """Load a conversation from a file."""
         if not hasattr(self, 'conversation') or not self.conversation:
-            self.conversation = ConversationChain(self.llm, system_prompt=self.system_prompt)
+            self.conversation = ConversationChain(
+                self.llm,
+                EnhancedMemory(),
+                self.system_prompt
+            )
+
         self.conversation.load_conversation(filepath)
+
+    def get_audit_summary(self) -> Optional[Dict[str, Any]]:
+        """Get a summary of the audit trail if auditing is enabled."""
+        if hasattr(self, 'audit_trail') and self.audit_trail:
+            return self.audit_trail.get_summary()
+        return None
+
+    def save_audit_trail(self, filepath: Optional[str] = None) -> Optional[str]:
+        """Save the audit trail to a file if auditing is enabled."""
+        if hasattr(self, 'audit_trail') and self.audit_trail:
+            return self.audit_trail.save(filepath)
+        return None
+
+    def run(self, user_query: str, max_steps: int = 5, verbose: bool = False,
+            return_trace: bool = False, use_cache: bool = True,
+            reasoning_mode: str = "medium", allow_repeated_calls: bool = False) -> Union[tuple, Dict[str, Any]]:
+        """Run the agent with configurable reasoning verbosity and auditing."""
+        run_start_time = time.time()
+
+        # Start new audit session for this run if auditing is enabled
+        if hasattr(self, 'audit_trail') and self.audit_trail:
+            self.audit_trail.start_session({
+                "user_query": user_query,
+                "max_steps": max_steps,
+                "reasoning_mode": reasoning_mode,
+                "use_cache": use_cache,
+                "system_prompt": self.system_prompt
+            })
+
+        # Initialize state with query
+        self.state.set("query.raw", user_query)
+        self.state.set("query.timestamp", datetime.now().isoformat())
+        self.state.set("execution.max_steps", max_steps)
+        self.state.set("execution.reasoning_mode", reasoning_mode)
+        self.state.set("execution.use_cache", use_cache)
+        self.state.set("execution.allow_repeated_calls", allow_repeated_calls)
+
+        # Reset tool call history for this run
+        self.tool_call_history = []
+        self.state.set("tools.called", {})
+        self.state.set("tools.errors", {})
+
+        # Define reasoning prompts with varying levels of detail
+        reasoning_prompts = {
+            "short": [
+                {"role": "system", "content": "Summarize your approach to this query in 1-2 clear sentences."},
+                {"role": "user", "content": f"Query: {user_query}\n\nSummarize approach:"}
+            ],
+            "medium": [
+                {"role": "system", "content": "Explain your approach in 3-6 sentences, balancing clarity with detail."},
+                {"role": "user", "content": f"Query: {user_query}\n\nOutline approach:"}
+            ],
+            "full": [
+                {"role": "system", "content": "Explain your thinking step by step in detail."},
+                {"role": "user",
+                 "content": f"Query: {user_query}\n\nWhat tools would help answer this? How will you approach this problem?"}
+            ]
+        }
+
+        # Use the cache only if explicitly requested
+        active_cache = self.cache if use_cache else None
+
+        # Initialize conversation with system prompt
+        conversation = [{
+            "role": "system",
+            "content": self.system_prompt
+        }]
+
+        # Add cache guidance to system prompt if using cache
+        if use_cache:
+            cache_guidance = """
+    You have access to cached results from previous tool calls.
+    When you see a tool result marked as "cached", it means this data was retrieved from cache rather than calling the tool again.
+    Consider whether cached data is still relevant for the current query before using it.
+    If you need fresh data, explicitly state that you want to ignore the cache for a specific tool call by setting bypass_cache to true.
+    """
+            conversation[0]["content"] += "\n" + cache_guidance
+
+        # Add guidance about repeated calls if duplicate detection is enabled
+        if not allow_repeated_calls:
+            repeat_guidance = """
+    Be efficient with tool calls. If you've already called a tool with specific parameters, use that information
+    rather than calling the same tool again with the same parameters.
+
+    If you genuinely need to call the same tool again with the same parameters (e.g., for time-sensitive data
+    or verification), add "force_repeat": true to the parameters to indicate this is intentional.
+    """
+            conversation[0]["content"] += "\n" + repeat_guidance
+
+        # Add user query
+        conversation.append({
+            "role": "user",
+            "content": user_query
+        })
+
+        # Record in memory
+        self.memory.add_to_history({
+            "role": "user",
+            "content": user_query,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        step = 0
+        final_response = ""
+
+        while step < max_steps:
+            # Track step in state
+            self.state.set("execution.current_step", step)
+
+            # We will hit the max steps if the model keeps choosing to use tools
+            if step == max_steps - 1:
+                # For the last step, explicitly ask for a final answer
+                conversation.append({
+                    "role": "user",
+                    "content": "Please provide your final answer based on the information above."
+                })
+
+            # First, get reasoning about how to approach the query
+            if step == 0 and self.tools:  # Only for the first step
+                # Skip reasoning entirely if mode is "none"
+                if reasoning_mode != "none":
+                    # Get the appropriate reasoning prompt based on verbosity mode
+                    reasoning_prompt = reasoning_prompts.get(reasoning_mode, reasoning_prompts["medium"])
+
+                    try:
+                        # Get the reasoning
+                        reasoning_start_time = time.time()
+                        reasoning = self.llm.generate(reasoning_prompt)
+                        reasoning_latency = time.time() - reasoning_start_time
+
+                        # Only show reasoning if verbose mode is enabled
+                        if verbose:
+                            print(f"🧠 Reasoning: {reasoning}")
+
+                        # Always store the full reasoning in memory and state
+                        self.memory.add_to_history({
+                            "role": "assistant",
+                            "content": f"Reasoning: {reasoning}",
+                            "type": "reasoning",
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        self.state.set("execution.initial_reasoning", reasoning)
+
+                        # Log reasoning to audit trail if available
+                        if hasattr(self, 'audit_trail') and self.audit_trail:
+                            self.audit_trail.log_reasoning(
+                                reasoning,
+                                step=step,
+                                metadata={
+                                    "reasoning_mode": reasoning_mode,
+                                    "latency": reasoning_latency
+                                }
+                            )
+                    except Exception as e:
+                        if verbose:
+                            print(f"⚠️ Error getting reasoning: {str(e)}")
+
+                        # Log error to audit trail if available
+                        if hasattr(self, 'audit_trail') and self.audit_trail:
+                            self.audit_trail.log_error(
+                                "reasoning_error",
+                                str(e),
+                                context={"step": step, "reasoning_mode": reasoning_mode}
+                            )
+
+            # Generate a response with potential tool usage
+            if self.tools:
+                # Generate a response that might include tool calls
+                if isinstance(self.llm, (OpenAILLM, CustomOpenAILLM)):
+                    response = self.llm.generate_with_tools(conversation, self.tools)
+                else:
+                    # For other LLMs, convert to text format
+                    prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation])
+                    response = self.llm.generate_with_tools(prompt, self.tools)
+
+                if response["type"] == "tool_call":
+                    # The LLM wants to use a tool
+                    tool_name = response["tool"]
+                    tool_args = response["args"]
+                    tool_reasoning = response.get("reasoning", "No explicit reasoning provided")
+
+                    # Create a unique key for this tool call
+                    tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+
+                    # Check for bypass_cache and force_repeat parameters
+                    bypass_cache = False
+                    force_repeat = False
+                    if "bypass_cache" in tool_args:
+                        bypass_cache = bool(tool_args.pop("bypass_cache"))
+                    if "force_repeat" in tool_args:
+                        force_repeat = bool(tool_args.pop("force_repeat"))
+
+                    # Check if this exact tool call has already been made
+                    duplicate_call = False
+                    if not allow_repeated_calls and not force_repeat:
+                        tool = next((t for t in self.tools if t.name == tool_name), None)
+                        if tool and not getattr(tool, 'allow_repeated_calls', False):
+                            for prev_call in self.tool_call_history:
+                                if prev_call["tool"] == tool_name and self._compare_args(prev_call["args"], tool_args):
+                                    duplicate_call = True
+                                    if verbose:
+                                        print(f"⚠️ Duplicate tool call detected: {tool_name}")
+
+                                    # Instead of making the duplicate call, add a hint to use different tools
+                                    conversation.append({
+                                        "role": "system",
+                                        "content": f"You've already called {tool_name} with these parameters. Please use the information you already have or try a different approach. If you genuinely need fresh data, include 'force_repeat': true in your parameters."
+                                    })
+
+                                    # Log duplicate call to audit trail if available
+                                    if hasattr(self, 'audit_trail') and self.audit_trail:
+                                        self.audit_trail.log_custom("duplicate_tool_call", {
+                                            "tool": tool_name,
+                                            "args": tool_args,
+                                            "step": step
+                                        })
+                                    break
+
+                    if duplicate_call:
+                        # Track in state
+                        self.state.append_to("execution.duplicate_calls", {
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "step": step,
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        step += 1
+                        continue
+
+                    # Find the tool
+                    tool = next((t for t in self.tools if t.name == tool_name), None)
+
+                    if tool:
+                        # Use the cache if available and not bypassed
+                        cache_to_use = None if bypass_cache else active_cache
+
+                        # Execute the tool (or get cached result)
+                        tool_start_time = time.time()
+                        tool_result = tool(cache=cache_to_use, **tool_args)
+                        tool_latency = time.time() - tool_start_time
+
+                        # Record in tool call history to prevent repetition
+                        self.tool_call_history.append({
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "result": tool_result,
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        # Track in state
+                        self.state.set(f"tools.called.{tool_key}", {
+                            "result": tool_result,
+                            "timestamp": datetime.now().isoformat(),
+                            "cached": tool_result.get("cached", False),
+                            "step": step
+                        })
+
+                        # Log tool call to audit trail if available
+                        if hasattr(self, 'audit_trail') and self.audit_trail:
+                            self.audit_trail.log_tool_call(
+                                tool_name,
+                                tool_args,
+                                tool_result,
+                                latency=tool_latency,
+                                cached=tool_result.get("cached", False),
+                                metadata={"step": step}
+                            )
+
+                        # Extract information based on tool type
+                        self._extract_info_from_tool_result(tool_name, tool_args, tool_result)
+
+                        # Check if we got a cached result
+                        if verbose:
+                            print(f"🛠️ Tool selected: {tool_name}")
+                            print(f"🔍 Parameters: {json.dumps(tool_args, indent=2)}")
+                            print(f"🧠 Tool selection reasoning: {tool_reasoning}")
+                            if tool_result.get("cached", False):
+                                print("♻️ Using cached result")
+
+                        # Add the reasoning to memory
+                        self.memory.add_to_history({
+                            "role": "assistant",
+                            "content": f"Tool reasoning: {tool_reasoning}",
+                            "type": "tool_reasoning",
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        # Add the tool call to the conversation and memory
+                        cache_status = " (requesting fresh data)" if bypass_cache else ""
+                        tool_call_message = f"I'll use the {tool_name} tool{cache_status} with these parameters: {json.dumps(tool_args)}"
+                        conversation.append({
+                            "role": "assistant",
+                            "content": tool_call_message
+                        })
+
+                        self.memory.add_to_history({
+                            "role": "assistant",
+                            "content": tool_call_message,
+                            "type": "tool_call",
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        # Add cache status to tool result message
+                        cache_notice = " (from cache)" if tool_result.get("cached", False) else ""
+
+                        # Handle success or error in tool result
+                        if isinstance(tool_result, dict) and "status" in tool_result:
+                            if tool_result["status"] == "success":
+                                result_content = f"Tool {tool_name} returned{cache_notice}: {json.dumps(tool_result['result'])}"
+                                if verbose:
+                                    print(f"📊 Result: {tool_result['result']}")
+                            else:  # Error case
+                                error_msg = tool_result.get("error", "Unknown error")
+                                result_content = f"Tool {tool_name} failed with error: {error_msg}"
+                                if verbose:
+                                    print(f"❌ Error: {error_msg}")
+
+                                # Track error in state
+                                self.state.set(f"tools.errors.{tool_key}", {
+                                    "error": error_msg,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "step": step
+                                })
+
+                                # Log error to audit trail if available
+                                if hasattr(self, 'audit_trail') and self.audit_trail:
+                                    self.audit_trail.log_error(
+                                        "tool_execution_error",
+                                        error_msg,
+                                        context={"tool": tool_name, "args": tool_args, "step": step}
+                                    )
+                        else:
+                            # Legacy format where the tool returns the result directly
+                            result_content = f"Tool {tool_name} returned{cache_notice}: {json.dumps(tool_result)}"
+                            if verbose:
+                                print(f"📊 Result: {tool_result}")
+
+                        # Add the tool result to the conversation
+                        conversation.append({
+                            "role": "system",
+                            "content": result_content
+                        })
+
+                        # Record in memory
+                        self.memory.add_to_history({
+                            "role": "system",
+                            "content": result_content,
+                            "type": "tool_result",
+                            "cached": tool_result.get("cached", False),
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        # After getting the tool result, ask the model to reflect on what it learned
+                        if step < max_steps - 1:  # Don't do this for the final step to save tokens
+                            try:
+                                # Adjust reflection level based on reasoning mode
+                                if reasoning_mode == "short":
+                                    reflection_prompt = [
+                                        {"role": "system",
+                                         "content": "In 1-2 sentences, what did you learn from this result?"},
+                                        {"role": "user",
+                                         "content": f"Tool: {tool_name}, Result summary: {str(tool_result)[:100]}..."}
+                                    ]
+                                elif reasoning_mode == "medium":
+                                    reflection_prompt = [
+                                        {"role": "system",
+                                         "content": "In 3-6 sentences, how does this result help answer the query?"},
+                                        {"role": "user",
+                                         "content": f"Original query: {user_query}\nTool: {tool_name}\nResult summary: {str(tool_result)[:200]}..."}
+                                    ]
+                                else:  # "full"
+                                    reflection_prompt = [
+                                        {"role": "system",
+                                         "content": "Based on the tool's result, reflect on what you've learned and how it helps answer the original query."},
+                                        {"role": "user",
+                                         "content": f"Original query: {user_query}\nTool used: {tool_name}\nTool result: {tool_result}\n\nReflect on what you've learned:"}
+                                    ]
+
+                                reflection_start_time = time.time()
+                                reflection = self.llm.generate(reflection_prompt)
+                                reflection_latency = time.time() - reflection_start_time
+
+                                if verbose:
+                                    print(f"🧠 Reflection: {reflection}")
+
+                                # Store reflection in memory and state
+                                self.memory.add_to_history({
+                                    "role": "assistant",
+                                    "content": f"Reflection: {reflection}",
+                                    "type": "reflection",
+                                    "timestamp": datetime.now().isoformat()
+                                })
+
+                                # Track reflection in state
+                                self.state.append_to("execution.reflections", {
+                                    "tool": tool_name,
+                                    "content": reflection,
+                                    "step": step,
+                                    "timestamp": datetime.now().isoformat()
+                                })
+
+                                # Log reflection to audit trail if available
+                                if hasattr(self, 'audit_trail') and self.audit_trail:
+                                    self.audit_trail.log_custom("reflection", {
+                                        "content": reflection,
+                                        "tool": tool_name,
+                                        "step": step,
+                                        "latency": reflection_latency
+                                    })
+                            except Exception as e:
+                                if verbose:
+                                    print(f"⚠️ Error getting reflection: {str(e)}")
+
+                                # Log error to audit trail if available
+                                if hasattr(self, 'audit_trail') and self.audit_trail:
+                                    self.audit_trail.log_error(
+                                        "reflection_error",
+                                        str(e),
+                                        context={"tool": tool_name, "step": step}
+                                    )
+
+                        step += 1
+                        continue
+
+                elif response["type"] == "error":
+                    # An error occurred during tool execution
+                    error_message = response["content"]
+
+                    # Add the error to the conversation
+                    conversation.append({
+                        "role": "system",
+                        "content": error_message
+                    })
+
+                    # Record in memory and state
+                    self.memory.add_to_history({
+                        "role": "system",
+                        "content": error_message,
+                        "type": "error",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                    self.state.append_to("execution.errors", {
+                        "message": error_message,
+                        "step": step,
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                    # Log error to audit trail if available
+                    if hasattr(self, 'audit_trail') and self.audit_trail:
+                        self.audit_trail.log_error(
+                            "response_error",
+                            error_message,
+                            context={"step": step}
+                        )
+
+                    if verbose:
+                        print(f"❌ Error: {error_message}")
+
+                    step += 1
+                    continue
+                else:
+                    # Direct text response
+                    final_response = response["content"]
+            else:
+                # No tools, just get a text response
+                response_start_time = time.time()
+                if isinstance(self.llm, (OpenAILLM, CustomOpenAILLM)):
+                    final_response = self.llm.generate_with_tools(conversation, [])["content"]
+                else:
+                    prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation])
+                    final_response = self.llm.generate(prompt)
+                response_latency = time.time() - response_start_time
+
+            # Add the final response to conversation and memory
+            conversation.append({
+                "role": "assistant",
+                "content": final_response
+            })
+
+            self.memory.add_to_history({
+                "role": "assistant",
+                "content": final_response,
+                "type": "final_response",
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Store final response in state
+            self.state.set("response", {
+                "content": final_response,
+                "timestamp": datetime.now().isoformat(),
+                "steps_taken": step + 1
+            })
+
+            # Log final response to audit trail if available
+            if hasattr(self, 'audit_trail') and self.audit_trail:
+                self.audit_trail.log_custom("final_response", {
+                    "content": final_response,
+                    "steps_taken": step + 1
+                })
+
+            if verbose:
+                print(f"🤖 Final response: {final_response}")
+
+            # We got a final answer, so we're done
+            break
+
+        # Increment step counter
+        step += 1
+
+        # Update step in state
+        self.state.set("execution.total_steps", step)
+
+        # Log run completion to audit trail if available
+        if hasattr(self, 'audit_trail') and self.audit_trail:
+            run_duration = time.time() - run_start_time
+            self.audit_trail.log_custom("run_complete", {
+                "steps_taken": step,
+                "duration": run_duration,
+                "token_usage": self.llm.get_token_usage()
+            })
+
+            # Save the audit trail to file if storage_path is set
+            if hasattr(self.audit_trail, 'storage_path') and self.audit_trail.storage_path:
+                audit_file = self.audit_trail.save()
+                if verbose:
+                    print(f"📝 Audit trail saved to: {audit_file}")
+
+        # Prepare the return value based on requested format
+        if return_trace:
+            # Return structured response with trace
+            return {
+                "response": final_response,
+                "history": self.memory.history,
+                "trace": self.trace.format_trace(),
+                "unique_tool_results": self.memory.get_unique_tool_results(),
+                "state": self.state.to_dict(),
+                "audit_trail": self.audit_trail.get_summary() if hasattr(self,
+                                                                         'audit_trail') and self.audit_trail else None
+            }
+        else:
+            # Return simple response and history
+            return final_response, self.memory.history
+
+
+
 
 
 
