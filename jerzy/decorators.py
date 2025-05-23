@@ -8,8 +8,6 @@ import logging
 from functools import wraps
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-LOG_PATH = "/content/teeno_logs.jsonl"  # You can change this path
-
 def robust_tool(retries: int = 3, wait_seconds: float = 1.0):
     def decorator(func):
         @retry(stop=stop_after_attempt(retries), wait=wait_fixed(wait_seconds))
@@ -31,7 +29,21 @@ def with_fallback(fallback_func):
         return wrapped
     return decorator
 
+
+# ========== Logging Setup ==========
+import logging
+
+from functools import wraps
+
+LOG_PATH = "/content/teeno_logs.jsonl"  # Change path if needed
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
 def log_tool_call(tool_name):
+    """Decorator to log start/end time, args, result, and duration."""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -53,13 +65,12 @@ def log_tool_call(tool_name):
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
 
-            try:
-                with open(LOG_PATH, "a") as f:
-                    f.write(json.dumps(log_entry) + "\n")
-            except Exception as log_err:
-                logging.warning(f"Failed to write log: {log_err}")
+            with open(LOG_PATH, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
 
             logging.info(f"[{tool_name}] status={status} duration={duration:.2f}s")
             return result
         return wrapper
     return decorator
+# ===================================
+
