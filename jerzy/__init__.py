@@ -1,6 +1,6 @@
 # jerzy/__init__.py
 
-from .core import Prompt, ToolCache, State
+from .core import Prompt, ToolCache, State, Tool
 from .memory import Memory, EnhancedMemory
 from .trace import Trace, AuditTrail
 from .llm import LLM, OpenAILLM
@@ -13,5 +13,7 @@ __all__ = [
     "Memory", "EnhancedMemory",
     "Trace", "AuditTrail", "LLM", "OpenAILLM",
     "Chain", "ConversationChain",
-    "Agent", "EnhancedAgent",  "robust_tool", "log_tool_call", "with_fallback"
+    "Agent", "EnhancedAgent",  "robust_tool", "log_tool_call", 
+    "with_fallback", "Tool"
+    
 ]
