@@ -5,7 +5,7 @@ from .memory import Memory, EnhancedMemory
 from .trace import Trace, AuditTrail
 from .llm import LLM, OpenAILLM
 from .chain import Chain, ConversationChain
-from .agent import Agent, EnhancedAgent
+from .agent import Agent, EnhancedAgent, ConversationalAgent, MultiAgentSystem, AgentRole, AgentMessage
 from .decorators import robust_tool, log_tool_call, with_fallback
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "Trace", "AuditTrail", "LLM", "OpenAILLM",
     "Chain", "ConversationChain",
     "Agent", "EnhancedAgent",  "robust_tool", "log_tool_call", 
-    "with_fallback", "Tool"
-    
+    "with_fallback", "Tool",
+     "ConversationalAgent", "MultiAgentSystem",
+    "AgentRole", "AgentMessage"
 ]
