@@ -8,8 +8,10 @@ from typing import Any, Dict, Optional, Tuple
 import json
 import time
 
+
 class Prompt:
     """Minimal prompt template system."""
+
     def __init__(self, template: str):
         self.template = template
 
@@ -22,35 +24,61 @@ class ToolCache:
     """Cache for storing and retrieving tool call results."""
 
     def __init__(self, max_size: int = 100, ttl: Optional[int] = None):
+        """
+        Initialize a new tool cache.
+
+        Args:
+            max_size: Maximum number of cached results to store
+            ttl: Time-to-live in seconds for cache entries (None for no expiration)
+        """
         self.cache: Dict[str, Tuple[Any, float]] = {}  # {cache_key: (result, timestamp)}
         self.max_size = max_size
         self.ttl = ttl
 
     def _generate_key(self, tool_name: str, args: Dict[str, Any]) -> str:
+        """Generate a unique cache key for a tool call."""
+        # Sort args to ensure consistent keys for same arguments
         sorted_args = json.dumps(args, sort_keys=True)
-        return f"{tool_name}:{sorted_args}"
+        key_string = f"{tool_name}:{sorted_args}"
+        # return hashlib.md5(key_string.encode()).hexdigest()
+        return key_string
 
     def get(self, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Retrieve a cached result if it exists and is not expired."""
         key = self._generate_key(tool_name, args)
+
         if key in self.cache:
             result, timestamp = self.cache[key]
+
+            # Check if the entry has expired
             if self.ttl is not None and time.time() - timestamp > self.ttl:
+                # Entry expired, remove it
                 del self.cache[key]
                 return None
+
             return result
+
         return None
 
     def set(self, tool_name: str, args: Dict[str, Any], result: Dict[str, Any]) -> None:
+        """Cache a tool call result."""
         key = self._generate_key(tool_name, args)
+
+        # Implement LRU-like behavior if we're at capacity
         if len(self.cache) >= self.max_size and key not in self.cache:
+            # Remove the oldest entry (simple approach)
             oldest_key = next(iter(self.cache))
             del self.cache[oldest_key]
+
+        # Store the result with the current timestamp
         self.cache[key] = (result, time.time())
 
     def clear(self) -> None:
+        """Clear all cached entries."""
         self.cache.clear()
 
     def remove(self, tool_name: str, args: Dict[str, Any]) -> None:
+        """Remove a specific cached entry."""
         key = self._generate_key(tool_name, args)
         if key in self.cache:
             del self.cache[key]
@@ -60,11 +88,13 @@ class State:
     """Manages the evolving state of knowledge during agent execution."""
 
     def __init__(self):
-        self.data = {}
-        self.history = []
-        self.version = 0
+        self.data = {}  # Current state
+        self.history = []  # State evolution history
+        self.version = 0  # For tracking state versions
 
     def set(self, key: str, value: Any) -> None:
+        """Set or update a state value using dot notation for nested access."""
+        # Support dot notation for nested dictionaries (e.g., "query.entities")
         if "." in key:
             parts = key.split(".")
             current = self.data
@@ -76,6 +106,7 @@ class State:
         else:
             self.data[key] = value
 
+        # Record change
         self.history.append({
             "action": "set",
             "key": key,
@@ -86,6 +117,8 @@ class State:
         self.version += 1
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Get a state value using dot notation for nested access."""
+        # Support dot notation for nested dictionaries
         if "." in key:
             parts = key.split(".")
             current = self.data
@@ -97,6 +130,7 @@ class State:
         return self.data.get(key, default)
 
     def has_key(self, key: str) -> bool:
+        """Check if a key exists in the state."""
         if "." in key:
             parts = key.split(".")
             current = self.data
@@ -108,6 +142,7 @@ class State:
         return key in self.data
 
     def append_to(self, key: str, value: Any) -> None:
+        """Append a value to a list at the specified key."""
         current = self.get(key, [])
         if not isinstance(current, list):
             current = [current]
@@ -115,9 +150,9 @@ class State:
         self.set(key, current)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the entire state to a dictionary."""
         import copy
         return copy.deepcopy(self.data)
-
 
 
 class Tool:
@@ -194,4 +229,3 @@ class Tool:
 
             # We don't cache errors
             return error_result
-
