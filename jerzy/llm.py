@@ -4,6 +4,7 @@ from jerzy.common import *
 
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from .core import Tool
 import json
 import re
 
