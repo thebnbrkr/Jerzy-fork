@@ -15,17 +15,21 @@ class Trace:
         self.memory = memory
 
     def get_full_trace(self) -> List[Dict[str, Any]]:
+        """Get the complete execution trace with all steps."""
         return self.memory.history
 
     def get_reasoning_trace(self) -> List[str]:
+        """Get only the reasoning steps."""
         return self.memory.get_reasoning_chain()
 
     def get_tool_trace(self) -> List[Dict[str, Any]]:
+        """Get only the tool calls and results."""
         return [entry for entry in self.memory.history
                 if entry.get("type") == "tool_call" or
                 (entry.get("role") == "system" and "Tool result:" in entry.get("content", ""))]
 
     def format_trace(self, format_type: str = "text") -> str:
+        """Format the trace for display in different formats."""
         if format_type == "text":
             return self._format_text_trace()
         elif format_type == "markdown":
@@ -36,6 +40,7 @@ class Trace:
             raise ValueError(f"Unsupported format type: {format_type}")
 
     def _format_text_trace(self) -> str:
+        """Format the trace as plain text."""
         lines = []
         for entry in self.memory.history:
             role = entry.get("role", "").upper()
@@ -51,13 +56,16 @@ class Trace:
                 lines.append(f"📊 RESULT{cached}: {content.replace('Tool result:', '').strip()}")
             else:
                 lines.append(f"{role}: {content}")
+
             lines.append("-" * 50)
+
         return "\n".join(lines)
 
     def _format_markdown_trace(self) -> str:
+        """Format the trace as markdown."""
         lines = ["# Execution Trace", ""]
-        current_step = 1
 
+        current_step = 1
         for entry in self.memory.history:
             role = entry.get("role", "").upper()
             content = entry.get("content", "")
@@ -82,9 +90,15 @@ class Trace:
             elif role == "ASSISTANT" and "Used tool:" not in content:
                 lines.append(f"## Final Answer")
                 lines.append(content)
+
             lines.append("")
 
         return "\n".join(lines)
+
+
+
+
+
 
 class AuditTrail:
     """Tracks detailed metrics for token usage, prompts, responses, and tool calls."""
