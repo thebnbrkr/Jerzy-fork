@@ -117,3 +117,81 @@ class State:
     def to_dict(self) -> Dict[str, Any]:
         import copy
         return copy.deepcopy(self.data)
+
+
+
+class Tool:
+    """Represents a callable tool for the LLM to use."""
+
+    def __init__(self, name: str, func: Callable, description: str, cacheable: bool = True,
+                 allow_repeated_calls: bool = False):
+        self.name = name
+        self.func = func
+        self.description = description
+        self.signature = self._get_signature()
+        self.cacheable = cacheable
+        self.allow_repeated_calls = allow_repeated_calls  # Flag to allow intentional repeats
+
+    def _get_signature(self) -> Dict[str, Any]:
+        """Extract parameter information from the function signature."""
+        sig = inspect.signature(self.func)
+        params = {}
+
+        for param_name, param in sig.parameters.items():
+            # Skip self for methods
+            if param_name == 'self':
+                continue
+
+            param_type = param.annotation if param.annotation != inspect.Parameter.empty else "string"
+            if hasattr(param_type, "__name__"):
+                type_name = param_type.__name__
+            else:
+                type_name = str(param_type).replace("<class '", "").replace("'>", "")
+
+            params[param_name] = {
+                "type": type_name,
+                "required": param.default == inspect.Parameter.empty
+            }
+
+        return params
+
+    def __call__(self, *args, **kwargs):
+        """Execute the tool with the provided arguments and handle caching."""
+        # Extract cache from kwargs if present
+        cache = kwargs.pop('cache', None)
+
+        # Check if we should try to use cache
+        if cache is not None and self.cacheable:
+            # Try to get cached result
+            cached_result = cache.get(self.name, kwargs)
+            if cached_result is not None:
+                # Add a flag to indicate this was a cache hit
+                cached_result["cached"] = True
+                return cached_result
+
+        # No cache hit, execute the tool
+        try:
+            result = {
+                "status": "success",
+                "result": self.func(*args, **kwargs),
+                "timestamp": datetime.now().isoformat(),
+                "cached": False
+            }
+
+            # Store in cache if applicable
+            if cache is not None and self.cacheable:
+                cache.set(self.name, kwargs, result)
+
+            return result
+        except Exception as e:
+            error_result = {
+                "status": "error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.now().isoformat(),
+                "cached": False
+            }
+
+            # We don't cache errors
+            return error_result
+
