@@ -1,8 +1,9 @@
 # trace.py - Execution tracing for reasoning and tool usage
 
 import json
-from typing import List, Dict, Any
+from typing import Optional, List, Dict, Any
 from .memory import Memory
+
 
 class Trace:
     """Captures and formats the execution trace for better explainability."""
