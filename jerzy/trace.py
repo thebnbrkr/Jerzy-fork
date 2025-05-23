@@ -1,5 +1,8 @@
 # trace.py - Execution tracing for reasoning and tool usage
 
+from jerzy.common import *
+
+
 import json
 from typing import Optional, Union, List, Dict, Any
 from .memory import Memory
