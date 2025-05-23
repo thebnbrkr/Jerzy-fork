@@ -5,7 +5,7 @@ from jerzy.common import *
 
 from typing import List, Any, Optional
 from .core import ToolCache, State, Tool
-from .trace import Trace, AuditTrail, Plan, Planer
+from .trace import Trace, AuditTrail, Plan, Planner
 from .memory import Memory, EnhancedMemory
 from .chain import Chain, ConversationChain
 from .llm import LLM, OpenaiLLM
