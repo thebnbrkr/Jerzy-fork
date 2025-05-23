@@ -4,7 +4,7 @@ from jerzy.common import *
 
 
 from typing import List, Any, Optional
-from .core import ToolCache, State
+from .core import ToolCache, State, Tool
 from .trace import Trace
 from .memory import Memory
 from .chain import ConversationChain
