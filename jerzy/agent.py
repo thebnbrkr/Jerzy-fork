@@ -11,7 +11,7 @@ from .chain import Chain, ConversationChain
 from .llm import LLM, OpenAILLM, CustomOpenAILLM
 
 #UQLM
-from .uqlm_adapter import UQLMScorer
+from .uqlm_adapter import UQLMScorer, JerzyUQLMLike
 
 
 
