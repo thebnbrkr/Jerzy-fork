@@ -1,5 +1,4 @@
 # jerzy/__init__.py
-
 from .core import Prompt, ToolCache, State, Tool
 from .memory import Memory, EnhancedMemory
 from .trace import Trace, AuditTrail, Plan, Planner
@@ -8,13 +7,22 @@ from .chain import Chain, ConversationChain
 from .agent import Agent, EnhancedAgent, ConversationalAgent, MultiAgentSystem, AgentRole, AgentMessage
 from .decorators import robust_tool, log_tool_call, with_fallback
 
+# Import UQLM adapter if available
+try:
+    from .adapters.uqlm_adapter import JerzyUQLMLike, UQLMScorer
+except ImportError:
+    # UQLM adapter will be imported on demand when methods are called
+    pass
+
 __all__ = [
     "Prompt", "ToolCache", "State",
     "Memory", "EnhancedMemory",
     "Trace", "AuditTrail", "LLM", "OpenAILLM",
     "Chain", "ConversationChain",
-    "Agent", "EnhancedAgent",  "robust_tool", "log_tool_call", 
+    "Agent", "EnhancedAgent", "robust_tool", "log_tool_call", 
     "with_fallback", "Tool", "CustomOpenAILLM",
-     "ConversationalAgent", "MultiAgentSystem",
-    "AgentRole", "AgentMessage", "Plan", "Planner"
+    "ConversationalAgent", "MultiAgentSystem",
+    "AgentRole", "AgentMessage", "Plan", "Planner",
+    # Add UQLM-related classes
+    "JerzyUQLMLike", "UQLMScorer"
 ]
