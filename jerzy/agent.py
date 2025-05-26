@@ -65,153 +65,156 @@ class Agent:
                 self.tools.append(tool)
 
     # Add this to the Agent class
-def score_uncertainty(self, prompt: str, num_responses: int = 5, 
-                     scorer_type: str = "black_box", scorers: List[str] = None) -> Dict[str, Any]:
-    """
-    Score the uncertainty of a prompt using UQLM.
-    
-    Args:
-        prompt: The prompt to score
-        num_responses: Number of responses to generate for scoring
-        scorer_type: Either "black_box" or "white_box"
-        scorers: List of specific scorers to use (default: None, which uses semantic_negentropy)
-        
-    Returns:
-        Dict containing scores and responses
-    """
-    try:
-        from jerzy.adapters.uqlm_adapter import UQLMScorer
-    except ImportError:
-        # Handle the case where the file doesn't exist yet
-        raise ImportError("UQLM adapter not found. Make sure to create jerzy/adapters/uqlm_adapter.py")
-    
-    # Log this action in the audit trail if enabled
-    if hasattr(self, 'audit_trail') and self.audit_trail:
-        self.audit_trail.log_custom("uqlm_score", {
-            "prompt": prompt,
-            "num_responses": num_responses,
-            "scorer_type": scorer_type,
-            "scorers": scorers
-        })
-    
-    scorer = UQLMScorer(self.llm, scorer_type=scorer_type, scorers=scorers)
-    result = scorer.score_prompt(prompt, num_responses=num_responses)
-    
-    # Store the result in state
-    self.state.set("uqlm.last_score", {
-        "prompt": prompt,
-        "confidence": result['confidence'],
-        "timestamp": datetime.now().isoformat()
-    })
-    
-    return result
 
-def score_multiple_prompts(self, prompts: List[str], num_responses: int = 5,
+    def score_uncertainty(self, prompt: str, num_responses: int = 5,
                           scorer_type: str = "black_box", scorers: List[str] = None) -> Dict[str, Any]:
-    """
-    Score the uncertainty of multiple prompts using UQLM.
-    
-    Args:
-        prompts: List of prompts to score
-        num_responses: Number of responses to generate for scoring
-        scorer_type: Either "black_box" or "white_box"
-        scorers: List of specific scorers to use (default: None, which uses semantic_negentropy)
-        
-    Returns:
-        Dict containing scores and responses for each prompt
-    """
-    from jerzy.adapters.uqlm_adapter import UQLMScorer
-    
-    # Log this action in the audit trail if enabled
-    if hasattr(self, 'audit_trail') and self.audit_trail:
-        self.audit_trail.log_custom("uqlm_score_multiple", {
-            "prompts": prompts,
-            "num_responses": num_responses,
-            "scorer_type": scorer_type,
-            "scorers": scorers
-        })
-    
-    scorer = UQLMScorer(self.llm, scorer_type=scorer_type, scorers=scorers)
-    result = scorer.score_multiple_prompts(prompts, num_responses=num_responses)
-    
-    # Store the result in state
-    self.state.set("uqlm.last_multiple_score", {
-        "prompts": prompts,
-        "confidence_scores": result['confidence'],
-        "timestamp": datetime.now().isoformat()
-    })
-    
-    return result
+        """
+        Score the uncertainty of a prompt using UQLM.
 
-def run_with_confidence_threshold(self, user_query: str, confidence_threshold: float = 0.7,
-                                 fallback_message: str = None, **run_kwargs) -> Dict[str, Any]:
-    """
-    Run the agent only if the confidence score exceeds the threshold.
-    
-    Args:
-        user_query: The user's question
-        confidence_threshold: Minimum confidence score to proceed (0-1)
-        fallback_message: Message to return if confidence is below threshold
-        **run_kwargs: Additional arguments to pass to the run method
-        
-    Returns:
-        Dict containing agent response and confidence information
-    """
-    # First score the query
-    score_result = self.score_uncertainty(user_query)
-    confidence = score_result['confidence']
-    
-    # Track in state
-    self.state.set("uqlm.confidence_check", {
-        "query": user_query,
-        "confidence": confidence,
-        "threshold": confidence_threshold,
-        "passed": confidence >= confidence_threshold,
-        "timestamp": datetime.now().isoformat()
-    })
-    
-    # Proceed only if confidence is high enough
-    if confidence >= confidence_threshold:
-        # Run the agent
-        run_result = self.run(user_query, **run_kwargs)
-        
-        # Format the result based on return_trace setting
-        if run_kwargs.get('return_trace', False):
-            response = run_result
-        else:
-            response, history = run_result
-            
-        return {
-            'response': response,
-            'confidence': confidence,
-            'passed_threshold': True,
-            'all_responses': score_result['responses']
-        }
-    else:
-        # Return the fallback message
-        default_fallback = (
-            f"I'm not confident in my ability to answer this question accurately. "
-            f"My confidence score is {confidence:.2f}, which is below the required threshold of {confidence_threshold:.2f}. "
-            f"Could you please rephrase or provide more context?"
-        )
-        
-        fallback = fallback_message or default_fallback
-        
-        # Log this in the audit trail
+        Args:
+            prompt: The prompt to score
+            num_responses: Number of responses to generate for scoring
+            scorer_type: Either "black_box" or "white_box"
+            scorers: List of specific scorers to use (default: None, which uses semantic_negentropy)
+
+        Returns:
+            Dict containing scores and responses
+        """
+        try:
+            from jerzy.adapters.uqlm_adapter import UQLMScorer
+        except ImportError:
+            # Handle the case where the file doesn't exist yet
+            raise ImportError("UQLM adapter not found. Make sure to create jerzy/adapters/uqlm_adapter.py")
+
+        # Log this action in the audit trail if enabled
         if hasattr(self, 'audit_trail') and self.audit_trail:
-            self.audit_trail.log_custom("confidence_threshold_not_met", {
-                "query": user_query,
-                "confidence": confidence,
-                "threshold": confidence_threshold,
-                "fallback_used": True
+            self.audit_trail.log_custom("uqlm_score", {
+                "prompt": prompt,
+                "num_responses": num_responses,
+                "scorer_type": scorer_type,
+                "scorers": scorers
             })
-        
-        return {
-            'response': fallback,
-            'confidence': confidence,
-            'passed_threshold': False,
-            'all_responses': score_result['responses']
-        }
+
+        scorer = UQLMScorer(self.llm, scorer_type=scorer_type, scorers=scorers)
+        result = scorer.score_prompt(prompt, num_responses=num_responses)
+
+        # Store the result in state
+        self.state.set("uqlm.last_score", {
+            "prompt": prompt,
+            "confidence": result['confidence'],
+            "timestamp": datetime.now().isoformat()
+        })
+
+        return result
+
+    def score_multiple_prompts(self, prompts: List[str], num_responses: int = 5,
+                               scorer_type: str = "black_box", scorers: List[str] = None) -> Dict[str, Any]:
+        """
+        Score the uncertainty of multiple prompts using UQLM.
+
+        Args:
+            prompts: List of prompts to score
+            num_responses: Number of responses to generate for scoring
+            scorer_type: Either "black_box" or "white_box"
+            scorers: List of specific scorers to use (default: None, which uses semantic_negentropy)
+
+        Returns:
+            Dict containing scores and responses for each prompt
+        """
+        from jerzy.adapters.uqlm_adapter import UQLMScorer
+
+        # Log this action in the audit trail if enabled
+        if hasattr(self, 'audit_trail') and self.audit_trail:
+            self.audit_trail.log_custom("uqlm_score_multiple", {
+                "prompts": prompts,
+                "num_responses": num_responses,
+                "scorer_type": scorer_type,
+                "scorers": scorers
+            })
+
+        scorer = UQLMScorer(self.llm, scorer_type=scorer_type, scorers=scorers)
+        result = scorer.score_multiple_prompts(prompts, num_responses=num_responses)
+
+        # Store the result in state
+        self.state.set("uqlm.last_multiple_score", {
+            "prompts": prompts,
+            "confidence_scores": result['confidence'],
+            "timestamp": datetime.now().isoformat()
+        })
+
+        return result
+
+    def run_with_confidence_threshold(self, user_query: str, confidence_threshold: float = 0.7,
+                                      fallback_message: str = None, **run_kwargs) -> Dict[str, Any]:
+        """
+        Run the agent only if the confidence score exceeds the threshold.
+
+        Args:
+            user_query: The user's question
+            confidence_threshold: Minimum confidence score to proceed (0-1)
+            fallback_message: Message to return if confidence is below threshold
+            **run_kwargs: Additional arguments to pass to the run method
+
+        Returns:
+            Dict containing agent response and confidence information
+        """
+        # First score the query
+        score_result = self.score_uncertainty(user_query)
+        confidence = score_result['confidence']
+
+        # Track in state
+        self.state.set("uqlm.confidence_check", {
+            "query": user_query,
+            "confidence": confidence,
+            "threshold": confidence_threshold,
+            "passed": confidence >= confidence_threshold,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Proceed only if confidence is high enough
+        if confidence >= confidence_threshold:
+            # Run the agent
+            run_result = self.run(user_query, **run_kwargs)
+
+            # Format the result based on return_trace setting
+            if run_kwargs.get('return_trace', False):
+                response = run_result
+            else:
+                response, history = run_result
+
+            return {
+                'response': response,
+                'confidence': confidence,
+                'passed_threshold': True,
+                'all_responses': score_result['responses']
+            }
+        else:
+            # Return the fallback message
+            default_fallback = (
+                f"I'm not confident in my ability to answer this question accurately. "
+                f"My confidence score is {confidence:.2f}, which is below the required threshold of {confidence_threshold:.2f}. "
+                f"Could you please rephrase or provide more context?"
+            )
+
+            fallback = fallback_message or default_fallback
+
+            # Log this in the audit trail
+            if hasattr(self, 'audit_trail') and self.audit_trail:
+                self.audit_trail.log_custom("confidence_threshold_not_met", {
+                    "query": user_query,
+                    "confidence": confidence,
+                    "threshold": confidence_threshold,
+                    "fallback_used": True
+                })
+
+            return {
+                'response': fallback,
+                'confidence': confidence,
+                'passed_threshold': False,
+                'all_responses': score_result['responses']
+            }
+
+
     
     def chat(self, user_message: str, thread_id: str = "default",
              use_semantic_search: bool = False, context_window: int = 10) -> str:
