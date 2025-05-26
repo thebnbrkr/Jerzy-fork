@@ -6,13 +6,8 @@ from .llm import LLM, OpenAILLM, CustomOpenAILLM
 from .chain import Chain, ConversationChain
 from .agent import Agent, EnhancedAgent, ConversationalAgent, MultiAgentSystem, AgentRole, AgentMessage
 from .decorators import robust_tool, log_tool_call, with_fallback
+from .adapters.uqlm_adapter import JerzyUQLMLike, UQLMScorer
 
-# Import UQLM adapter if available
-try:
-    from .adapters.uqlm_adapter import JerzyUQLMLike, UQLMScorer
-except ImportError:
-    # UQLM adapter will be imported on demand when methods are called
-    pass
 
 __all__ = [
     "Prompt", "ToolCache", "State",
