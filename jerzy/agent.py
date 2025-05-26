@@ -10,6 +10,10 @@ from .memory import Memory, EnhancedMemory
 from .chain import Chain, ConversationChain
 from .llm import LLM, OpenAILLM, CustomOpenAILLM
 
+#UQLM
+from jerzy.adapters.uqlm_adapter import UQLMScorer
+
+
 
 class Agent:
     """Enhanced LLM-powered agent with transparency, reasoning, and caching capabilities."""
