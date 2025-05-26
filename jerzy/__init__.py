@@ -6,7 +6,7 @@ from .llm import LLM, OpenAILLM, CustomOpenAILLM
 from .chain import Chain, ConversationChain
 from .agent import Agent, EnhancedAgent, ConversationalAgent, MultiAgentSystem, AgentRole, AgentMessage
 from .decorators import robust_tool, log_tool_call, with_fallback
-from .adapters.uqlm_adapter import JerzyUQLMLike, UQLMScorer
+from .uqlm_adapter import JerzyUQLMLike, UQLMScorer
 
 
 __all__ = [
