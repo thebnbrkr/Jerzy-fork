@@ -85,7 +85,7 @@ class Agent:
             Dict containing scores and responses
         """
         try:
-            from jerzy.adapters.uqlm_adapter import UQLMScorer
+            from .uqlm_adapter import UQLMScorer
         except ImportError:
             # Handle the case where the file doesn't exist yet
             raise ImportError("UQLM adapter not found. Make sure to create jerzy/adapters/uqlm_adapter.py")
@@ -125,7 +125,7 @@ class Agent:
         Returns:
             Dict containing scores and responses for each prompt
         """
-        from jerzy.adapters.uqlm_adapter import UQLMScorer
+        from .uqlm_adapter import UQLMScorer
 
         # Log this action in the audit trail if enabled
         if hasattr(self, 'audit_trail') and self.audit_trail:
