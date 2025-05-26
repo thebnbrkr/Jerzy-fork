@@ -1,6 +1,6 @@
 # agent.py - Central LLM-powered agent interface
 
-from jerzy.common import *
+from .common import *
 
 
 from typing import List, Any, Optional
@@ -11,7 +11,7 @@ from .chain import Chain, ConversationChain
 from .llm import LLM, OpenAILLM, CustomOpenAILLM
 
 #UQLM
-from jerzy.adapters.uqlm_adapter import UQLMScorer
+from .adapters.uqlm_adapter import UQLMScorer
 
 
 
